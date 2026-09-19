@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>dev.mikko</groupId>
+  <artifactId>async-http-client-check</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>async-http-client-check</name>
+  <description>Offline checker for the 21 repository-level AsyncHttpClient (org.asynchttpclient:async-http-client) security advisories. 13 of the 17 published on 2026-08-09 are missing from the GitHub global advisory database that Dependabot and OSV read - so Dependabot tells 3.x users to upgrade to 3.0.12, which is itself still affected by 5 of them. The real answer is 3.0.13 / 2.16.1.</description>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <!-- 运行时零依赖,是刻意的:排查工具要能丢进任何环境直接跑。 -->
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- 🔴 插件版本被本机 Maven 3.5.4(2018) 卡死,别升 —— 见 netty-http2-check 同段注释。 -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>dev.mikko.ahccheck.Main</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.22.2</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
