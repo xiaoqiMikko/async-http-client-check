@@ -127,7 +127,7 @@ class ScannerTest {
 
     @Test
     void 干净的jar加一个坏文件_退出码是4不是0(@TempDir Path dir) throws Exception {
-        Files.write(dir.resolve("ok.jar"), ahcJar("org.asynchttpclient", "async-http-client", "3.0.13"));
+        Files.write(dir.resolve("ok.jar"), ahcJar("org.asynchttpclient", "async-http-client", "3.0.14"));
         Files.write(dir.resolve("broken.jar"), "not a zip".getBytes(StandardCharsets.UTF_8));
         assertEquals(Main.EXIT_UNREADABLE, Main.run(new String[]{dir.toString()}));
     }
@@ -141,8 +141,15 @@ class ScannerTest {
 
     @Test
     void 干净的jar_退出码0(@TempDir Path dir) throws Exception {
-        Files.write(dir.resolve("ok.jar"), ahcJar("org.asynchttpclient", "async-http-client", "2.16.1"));
+        Files.write(dir.resolve("ok.jar"), ahcJar("org.asynchttpclient", "async-http-client", "3.0.14"));
         assertEquals(0, Main.run(new String[]{dir.toString()}));
+    }
+
+    @Test
+    void 二点x终版不是干净的_退出码1(@TempDir Path dir) throws Exception {
+        // v0.1.0 对 2.16.1 返回 0。2.x 已停止维护、仍中 5 条无修复版的 —— 返回 0 会让流水线放行。
+        Files.write(dir.resolve("eol.jar"), ahcJar("org.asynchttpclient", "async-http-client", "2.16.1"));
+        assertEquals(1, Main.run(new String[]{dir.toString()}));
     }
 
     @Test

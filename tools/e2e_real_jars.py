@@ -17,7 +17,7 @@ import zipfile
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HERE = os.path.dirname(os.path.abspath(__file__))
-JAR = os.path.join(HERE, "..", "target", "async-http-client-check-0.1.0.jar")
+JAR = os.path.join(HERE, "..", "target", "async-http-client-check-0.2.0.jar")
 WORK = os.path.join(HERE, "e2e")
 CENTRAL = ("https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/%s/"
            "async-http-client-%s.jar")
@@ -76,41 +76,58 @@ def hit_block(out):
 
 
 print("=" * 78)
-print("场景 1:真 jar 3.0.12 —— Dependabot 叫你升到的版本,本工具应判中 5 条且全部未收录")
+print("场景 1:真 jar 3.0.13 —— v0.1.0 说它干净;09-24 起应判中 5 条、答案 3.0.14")
 d = fresh("s1")
-shutil.copy(fetch("3.0.12"), d)
+shutil.copy(fetch("3.0.13"), d)
 code, out = run("s1", d)
 check("退出码 1(中了)", code == 1, "实际 %d" % code)
 check("从 pom.properties 认出", "pom.properties" in out, out[:300])
 check("中了 5 条", hit_block(out) == 5, "实际 %d" % hit_block(out))
-got = [x for x in ids(out) if x.startswith("GHSA-")]
-want = ["GHSA-f9m8-cv68-674w", "GHSA-jmqq-x5g9-9p2w", "GHSA-qhv6-3pmh-95q4",
-        "GHSA-rqf5-2wxv-rjf4", "GHSA-vvp4-63h8-v5pm"]
-check("编号就是那 5 条 GHSA", got == want, "实际 %s" % got)
-check("5 条都标了「未收录」", out.count("Dependabot/全局库:未收录") == 5,
+# 🔴 只取每条命中行行首的编号 —— 标题里会提到别的编号(「CVE-2024-53990 修复被绕过」),全文抓会多算。
+got = sorted(re.findall(r"^ {5}(CVE-\d{4}-\d+|GHSA-[\w-]{14}) ", out, re.M))
+want = ["CVE-2026-107226", "CVE-2026-107227", "CVE-2026-107228", "CVE-2026-107229", "CVE-2026-107230"]
+check("编号就是 09-24 那批 5 条", got == want, "实际 %s" % got)
+check("只有 1 条标「未收录」", out.count("Dependabot/全局库:未收录") == 1,
       "实际 %d" % out.count("Dependabot/全局库:未收录"))
-check("没有一条标「已收录」", "Dependabot/全局库:已收录" not in out)
-check("给出 3.0.13", "一次修完这几条要升到:3.0.13" in out)
+check("给出 3.0.14", "一次修完这几条要升到:3.0.14" in out)
+check("没有出现「迁移」字样(3.x 有修复版)", "迁移" not in out)
 
 print()
 print("=" * 78)
-print("场景 2:真 jar 3.0.13 —— 应干净")
+print("场景 2:真 jar 3.0.14 —— 应干净")
 d = fresh("s2")
-shutil.copy(fetch("3.0.13"), d)
+shutil.copy(fetch("3.0.14"), d)
 code, out = run("s2", d)
 check("退出码 0", code == 0, "实际 %d;%s" % (code, out[-300:]))
 check("说了一条都没中", "一条都没中" in out)
+check("印了规则表生成日", "规则表生成于 2026-" in out)
 
 print()
 print("=" * 78)
-print("场景 3:真 jar 2.12.3 —— 2.x 老版本,应中一大片、目标 2.16.1,且含 CVE-2024-53990(只在全局库的 2.x 区间)")
+print("场景 3:⭐ 真 jar 2.16.1 —— 2.x 终版,v0.1.0 判干净;应判中 5 条且全部无修复版")
 d = fresh("s3")
-shutil.copy(fetch("2.12.3"), d)
+shutil.copy(fetch("2.16.1"), d)
 code, out = run("s3", d)
+check("退出码 1(不是 0)", code == 1, "实际 %d" % code)
+check("中了 5 条", hit_block(out) == 5, "实际 %d" % hit_block(out))
+check("5 条都标「无(2.x 线已停止维护)」", out.count("修复版 无(2.x 线已停止维护)") == 5,
+      "实际 %d" % out.count("修复版 无(2.x 线已停止维护)"))
+check("引了官方原文", "The 2.x line is end of life and will not receive a fix" in out)
+check("没有给出任何 2.x 版本号当答案", "一次修完这几条要升到" not in out)
+check("结论是迁到 3.0.14", "需要升到 3.0.14(从 2.x 线迁移)" in out)
+
+print()
+print("=" * 78)
+print("场景 3b:真 jar 2.12.3 —— 2.x 老版本,含 CVE-2024-53990(只在全局库的 2.x 区间);升到 2.16.1 后剩 5 条不是 4 条")
+d = fresh("s3b")
+shutil.copy(fetch("2.12.3"), d)
+code, out = run("s3b", d)
 check("退出码 1", code == 1, "实际 %d" % code)
 check("中了 >= 15 条", hit_block(out) >= 15, "实际 %d" % hit_block(out))
 check("含 CVE-2024-53990", "CVE-2024-53990" in out)
-check("给出 2.16.1", "一次修完这几条要升到:2.16.1" in out)
+check("现在中的无修复版是 4 条", "其中 4 条在 2.x 线上没有修复版" in out)
+check("升到 2.16.1 后仍中 5 条", "最多能升到 2.16.1,升完仍中 5 条" in out, out[-700:])
+check("结论是迁到 3.0.14", "需要升到 3.0.14(从 2.x 线迁移)" in out)
 
 print()
 print("=" * 78)
@@ -120,14 +137,13 @@ with zipfile.ZipFile(os.path.join(d, "app.jar"), "w") as z:
     z.write(fetch("3.0.11"), "BOOT-INF/lib/lib-a.jar")     # 🔴 故意改名:证明不靠文件名认
     z.writestr("BOOT-INF/classes/App.class", b"\xca\xfe\xba\xbe")
 with zipfile.ZipFile(os.path.join(d, "app.war"), "w") as z:
-    z.write(fetch("2.16.1"), "WEB-INF/lib/x.jar")
+    z.write(fetch("3.0.14"), "WEB-INF/lib/x.jar")
 code, out = run("s4", d)
 check("退出码 1(3.0.11 中了)", code == 1, "实际 %d" % code)
 check("嵌套路径写出来了(fat-jar)", "!/BOOT-INF/lib/lib-a.jar" in out, out[:600])
 check("嵌套路径写出来了(war)", "!/WEB-INF/lib/x.jar" in out)
-check("3.0.11 判出 Dependabot 只会叫你升 3.0.12", "会叫你升到 3.0.12" in out)
-check("2.16.1 那一段干净", "一条都没中" in out)
-check("结论给出 3.0.13", "需要升到 3.0.13" in out)
+check("3.0.14 那一段干净", "一条都没中" in out)
+check("结论给出 3.0.14", "需要升到 3.0.14" in out)
 
 print()
 print("=" * 78)
@@ -144,7 +160,7 @@ print()
 print("=" * 78)
 print("场景 6:☠️ 坏 jar + 干净真 jar —— 退出码必须是 4,不许是 0")
 d = fresh("s6")
-shutil.copy(fetch("3.0.13"), d)
+shutil.copy(fetch("3.0.14"), d)
 with open(os.path.join(d, "broken.jar"), "wb") as f:
     f.write(b"this is definitely not a zip file")
 code, out = run("s6", d)
@@ -156,6 +172,9 @@ print("=" * 78)
 print("场景 7:--version-of")
 code, out = run("s7a", "--version-of", "3.0.12")
 check("3.0.12 退出码 1", code == 1)
+check("3.0.12 的答案是 3.0.14", "一次修完这几条要升到:3.0.14" in out)
+code, out = run("s7c", "--version-of", "2.16.1")
+check("2.16.1 退出码 1(v0.1.0 是 0)", code == 1, "实际 %d" % code)
 code, out = run("s7b", "--version-of", "不是版本号")
 check("认不出的版本号 → 退出码 2", code == 2, "实际 %d" % code)
 
@@ -164,4 +183,4 @@ print("=" * 78)
 if fails:
     print("❌ 端到端回测失败 %d 项:%s" % (len(fails), fails))
     sys.exit(1)
-print("✅ 端到端回测全过(7 个场景,用的是 Central 上的真 jar)")
+print("✅ 端到端回测全过(8 个场景,用的是 Central 上的真 jar)")

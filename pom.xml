@@ -6,11 +6,11 @@
 
   <groupId>dev.mikko</groupId>
   <artifactId>async-http-client-check</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <packaging>jar</packaging>
 
   <name>async-http-client-check</name>
-  <description>Offline checker for the 21 repository-level AsyncHttpClient (org.asynchttpclient:async-http-client) security advisories. 13 of the 17 published on 2026-08-09 are missing from the GitHub global advisory database that Dependabot and OSV read - so Dependabot tells 3.x users to upgrade to 3.0.12, which is itself still affected by 5 of them. The real answer is 3.0.13 / 2.16.1.</description>
+  <description>Offline checker for the 26 repository-level AsyncHttpClient (org.asynchttpclient:async-http-client) security advisories. As of 2026-10-12 nine of them are still missing from the GitHub global advisory database that Dependabot and OSV read. 3.x is fixed in 3.0.14. The 2.x line is end of life: its last release 2.16.1 is still affected by 5 advisories that will not be fixed.</description>
 
   <properties>
     <maven.compiler.release>17</maven.compiler.release>

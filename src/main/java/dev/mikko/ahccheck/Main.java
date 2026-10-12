@@ -12,7 +12,8 @@ import java.util.Set;
 import java.util.TreeMap;
 
 /**
- * async-http-client-check —— 离线判定 org.asynchttpclient:async-http-client 的 21 条仓库级 advisory。
+ * async-http-client-check —— 离线判定 org.asynchttpclient:async-http-client 的仓库级 advisory
+ * (条数见 {@link RuleTable#ADVISORIES},随规则表生成)。
  *
  * <p>退出码:0 = 没中(且每个文件都读进去了);1 = 中了;2 = 判不了(参数错、路径不存在、版本号认不出);
  * 4 = 有文件读不动。
@@ -24,7 +25,7 @@ public final class Main {
     /** 有文件读不动 —— 「我没能读它」不许在自动化里等于「通过」。 */
     static final int EXIT_UNREADABLE = 4;
 
-    private static final String VERSION = "0.1.0";
+    private static final String VERSION = "0.2.0";
 
     public static void main(String[] args) {
         try {
@@ -83,7 +84,9 @@ public final class Main {
         final boolean unreadable = byArtifact.values().stream().flatMap(List::stream)
                 .anyMatch(f -> f.source() != null && f.source().startsWith(Scanner.UNREADABLE_PREFIX));
         System.out.println("async-http-client-check " + VERSION
-                + " —— async-http-client 21 条仓库级 advisory 离线自查");
+                + " —— async-http-client " + RuleTable.ADVISORIES + " 条仓库级 advisory 离线自查");
+        System.out.println("规则表生成于 " + RuleTable.AS_OF + ":下面的「已收录 / 未收录」是那天 GitHub 全局 advisory 库的状态,"
+                + "之后可能已补收。");
         System.out.println("=".repeat(78));
 
         System.out.println();
@@ -130,8 +133,9 @@ public final class Main {
                     anyUnknown = true;
                     continue;
                 }
-                System.out.println("  ✅ 这 21 条里一条都没中。");
-                System.out.println("  🔴 但这只说明这 21 条 —— 不是「async-http-client 没有别的问题」。");
+                System.out.println("  ✅ 这 " + RuleTable.ADVISORIES + " 条里一条都没中。");
+                System.out.println("  🔴 但这只说明这 " + RuleTable.ADVISORIES
+                        + " 条(截至 " + RuleTable.AS_OF + ")—— 不是「async-http-client 没有别的问题」。");
                 continue;
             }
 
@@ -143,13 +147,32 @@ public final class Main {
             for (RuleTable.Rule r : verdict.hits()) {
                 System.out.printf("     %-20s %-8s %s%n", r.id(), r.severity(), r.title());
                 System.out.printf("        区间 %s → 修复版 %s · Dependabot/全局库:%s%n",
-                        r.range(), r.fix(), r.inGlobal() ? "已收录" : "未收录");
+                        r.range(), r.fix() != null ? r.fix() : "无(" + r.line() + " 线已停止维护)",
+                        r.inGlobal() ? "已收录" : "未收录");
             }
 
-            allFixes.add(verdict.fixAll());
             System.out.println();
-            System.out.println("  → 一次修完这几条要升到:" + verdict.fixAll());
-            if (verdict.invisible() > 0) {
+            if (verdict.migrateTo() != null) {
+                // 🔴 命中了「本线无修复版」的条目:本线内不存在干净版本,不许再给一个本线的版本号当答案。
+                System.out.println("  🔴 其中 " + verdict.unfixed() + " 条在 " + verdict.line()
+                        + " 线上没有修复版。官方原文:");
+                System.out.println("     \"" + RuleTable.EOL_QUOTE + "\"");
+                if (verdict.fixAll() != null && Versions.compare(verdict.version(), verdict.fixAll()) < 0) {
+                    // 🔴 「升完还剩几条」要拿升完的那个版本重新判,不能直接用当前版本的无修复条数 ——
+                    // 2.12.3 现在中 4 条无修复的,升到 2.16.1 之后是 5 条(CVE-2026-107229 从 2.16.0 起才中)。
+                    System.out.println("  → 留在 " + verdict.line() + " 线最多能升到 " + verdict.fixAll()
+                            + ",升完仍中 " + verdict.remainingAfterFixAll() + " 条(都没有修复版)。");
+                } else {
+                    System.out.println("  → 这已经是 " + verdict.line() + " 线能到的最高修复状态,仍中这 "
+                            + verdict.unfixed() + " 条。");
+                }
+                System.out.println("  → 要修完只能迁到 3.x 线的 " + verdict.migrateTo() + "(跨大版本,不是只改一个版本号)。");
+                allFixes.add(verdict.migrateTo() + "(从 " + verdict.line() + " 线迁移)");
+            } else {
+                allFixes.add(verdict.fixAll());
+                System.out.println("  → 一次修完这几条要升到:" + verdict.fixAll());
+            }
+            if (verdict.invisible() > 0 && verdict.migrateTo() == null) {
                 if (verdict.dependabotFix() == null) {
                     System.out.println("  🔴 这几条全局库一条都没收 —— Dependabot / OSV 对这个版本不会报任何东西。");
                 } else if (Versions.compare(verdict.dependabotFix(), verdict.fixAll()) < 0) {
@@ -185,12 +208,14 @@ public final class Main {
 
     private static void usage() {
         System.out.println("async-http-client-check " + VERSION);
-        System.out.println("离线判定 org.asynchttpclient:async-http-client 的 21 条仓库级 advisory");
-        System.out.println("(其中 13 条 GitHub 全局 advisory 库未收录 —— Dependabot / OSV 看不见)。");
+        System.out.println("离线判定 org.asynchttpclient:async-http-client 的 " + RuleTable.ADVISORIES + " 条仓库级 advisory");
+        System.out.println("(截至 " + RuleTable.AS_OF + " 其中 " + RuleTable.MISSING_GLOBAL
+                + " 条 GitHub 全局 advisory 库未收录 —— Dependabot / OSV 看不见;");
+        System.out.println(" " + RuleTable.EOL_LINE + " 线官方已停止维护,有 advisory 在该线上没有修复版)。");
         System.out.println();
         System.out.println("用法:");
         System.out.println("  java -jar async-http-client-check.jar <目录或 jar/war>");
-        System.out.println("  java -jar async-http-client-check.jar --version-of 3.0.12");
+        System.out.println("  java -jar async-http-client-check.jar --version-of 3.0.13");
         System.out.println();
         System.out.println("退出码:0 = 没中 · 1 = 中了 · 2 = 判不了 · 4 = 有文件读不动");
         System.out.println();
